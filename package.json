@@ -1,0 +1,12 @@
+{
+  "name": "sightmd-codex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SightMD Markdown editor adapted for Codex.",
+  "scripts": {
+    "start": "node server.mjs --http",
+    "test": "node --test test/server.test.mjs",
+    "build:inline": "node scripts/build-inline.mjs"
+  }
+}

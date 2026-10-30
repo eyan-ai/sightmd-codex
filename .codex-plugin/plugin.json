@@ -1,0 +1,25 @@
+{
+  "name": "sightmd-codex",
+  "version": "0.1.0",
+  "description": "Open and edit Markdown in a SightMD panel inside Codex.",
+  "author": { "name": "eyanlin" },
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SightMD",
+    "shortDescription": "Edit Markdown in a Codex panel",
+    "longDescription": "Open Markdown files in a preview-first SightMD editor with Preview, Split Edit, and Read Only modes.",
+    "developerName": "eyanlin",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "composerIcon": "./logo.png",
+    "logo": "./logo.png",
+    "defaultPrompt": [
+      "Open this Markdown file in SightMD",
+      "Edit this Markdown with a live preview",
+      "Review this Markdown in split mode"
+    ],
+    "brandColor": "#2B6CB0",
+    "screenshots": []
+  }
+}

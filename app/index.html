@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SightMD for Codex</title>
+  <link rel="stylesheet" href="./dist/main.css">
+  <link rel="stylesheet" href="./eyan-editor.css">
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--vscode-editor-background, #fff); color: var(--vscode-editor-foreground, #24292f); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { display: flex; flex-direction: column; }
+    #codex-toolbar { display:flex; align-items:center; gap:8px; min-height:42px; padding:6px 10px; border-bottom:1px solid color-mix(in srgb, currentColor 16%, transparent); background: color-mix(in srgb, currentColor 4%, transparent); }
+    #codex-path { flex:1; min-width:0; border:1px solid color-mix(in srgb, currentColor 18%, transparent); border-radius:6px; padding:7px 9px; background:transparent; color:inherit; }
+    #codex-save { border:0; border-radius:6px; padding:7px 12px; color:#fff; background:#2b6cb0; cursor:pointer; }
+    #codex-save:disabled { opacity:.45; cursor:default; }
+    #codex-status { min-width:120px; color:color-mix(in srgb, currentColor 65%, transparent); }
+    #app { flex:1; min-height:0; }
+    .codex-conflict { color:#b42318; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div id="codex-toolbar">
+    <input id="codex-path" aria-label="Markdown path" spellcheck="false">
+    <button id="codex-save" type="button">Save</button>
+    <span id="codex-status" role="status">Loading…</span>
+  </div>
+  <div id="app"></div>
+  <script>
+    window.__SIGHTMD_BOOTSTRAP__ = window.__SIGHTMD_BOOTSTRAP__ || {};
+    const bootstrap = window.__SIGHTMD_BOOTSTRAP__;
+    const params = new URLSearchParams(location.search);
+    const state = { path: bootstrap.path || params.get('path') || '', content: '', mtimeMs: 0, dirty: false, conflict: false, mode: bootstrap.mode || params.get('mode') || 'preview' };
+    const pathInput = document.getElementById('codex-path');
+    const saveButton = document.getElementById('codex-save');
+    const status = document.getElementById('codex-status');
+    pathInput.value = state.path;
+    const setStatus = (text, conflict) => { status.textContent = text; status.classList.toggle('codex-conflict', !!conflict); };
+    const api = {
+      postMessage(message) {
+        if (!message) return;
+        if (message.command === 'edit' && typeof message.content === 'string') {
+          state.content = message.content; state.dirty = true; saveButton.disabled = false; setStatus('Unsaved changes', false);
+        } else if (message.command === 'open-link' && message.href) {
+          window.open(message.href, '_blank', 'noopener');
+        } else if (message.command === 'resolve-link-preview') {
+          window.postMessage({ command: 'markdown-editor:resolved-link-preview', href: message.href, requestId: message.requestId, display: message.href }, '*');
+        }
+      }
+    };
+    window.vscode = api;
+    window.acquireVsCodeApi = () => api;
+    async function readFile() {
+      if (!state.path) { setStatus('Choose a Markdown path', false); return; }
+      const response = await fetch('/api/read?path=' + encodeURIComponent(state.path));
+      if (!response.ok) throw new Error(await response.text());
+      const data = await response.json();
+      state.content = data.content; state.mtimeMs = data.mtimeMs; state.dirty = false; state.conflict = false;
+      saveButton.disabled = true; setStatus('Saved', false);
+      window.postMessage({ command:'update', type:'init', content: state.content, theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', editorMode: state.mode, editorTheme: 'default' }, '*');
+    }
+    async function saveFile() {
+      if (!state.path || state.conflict) return;
+      saveButton.disabled = true; setStatus('Saving…', false);
+      const response = await fetch('/api/write', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ path: state.path, content: state.content, expectedMtimeMs: state.mtimeMs }) });
+      const data = await response.json();
+      if (!response.ok) { state.conflict = data.code === 'CONFLICT'; saveButton.disabled = false; setStatus(data.message || 'Save failed', state.conflict); return; }
+      state.mtimeMs = data.mtimeMs; state.dirty = false; state.conflict = false; setStatus('Saved', false);
+    }
+    saveButton.addEventListener('click', saveFile);
+    pathInput.addEventListener('change', async () => { state.path = pathInput.value.trim(); try { await readFile(); } catch (error) { setStatus(error.message, true); } });
+    setInterval(async () => {
+      if (!state.path) return;
+      try {
+        const response = await fetch('/api/stat?path=' + encodeURIComponent(state.path));
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.mtimeMs !== state.mtimeMs) {
+          if (state.dirty) { state.conflict = true; saveButton.disabled = true; setStatus('External change needs review', true); }
+          else await readFile();
+        }
+      } catch (_) {}
+    }, 1500);
+    window.__sightmdReadFile = readFile;
+  </script>
+  <script src="./dist/main.js"></script>
+  <script src="./eyan-editor.js"></script>
+  <script>window.addEventListener('load', () => window.__sightmdReadFile().catch(error => document.getElementById('codex-status').textContent = error.message));</script>
+</body>
+</html>
